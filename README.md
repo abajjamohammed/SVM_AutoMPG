@@ -147,3 +147,47 @@ L'analyse de l'hyperparamètre $\epsilon$ sur la grille $[0.1, \; 0.5, \; 1.0, \
     ├── data_preprocessing.py # Pipeline de nettoyage, encodage et découpage
     ├── svm_classifier.py     # Classifieur quadratique dual & One-vs-Rest
     └── svm_regressor.py      # Régresseur SVR à perte epsilon-insensible
+
+    ---
+
+## 6. Protocole de Reproduction & Exécution
+
+Pour répliquer l'intégralité des expériences et régénérer les visualisations :
+
+### 1. Prérequis système
+* Python >= 3.8
+* Git installé
+* Gestionnaire de paquets pip ou environnement Anaconda
+
+### 2. Cloner et accéder au projet
+Ouvrez un terminal et récupérez le dépôt en local :
+git clone https://github.com/abajjamohammed/SVM_AutoMPG
+cd Projet_SVM_AutoMPG
+
+(Si le projet est déjà cloné, assurez-vous d'avoir la dernière version) :
+git pull origin main
+
+### 3. Créer et activer un environnement virtuel (recommandé)
+Sur Linux / macOS :
+python3 -m venv venv
+source venv/bin/activate
+
+Sur Windows :
+python -m venv venv
+venv\Scripts\activate
+
+### 4. Installer les dépendances
+Installez les bibliothèques requises (incluant le solveur quadratique cvxopt) :
+pip install -r requirements.txt
+
+### 5. Exécution des expérimentations
+Deux options au choix pour lancer les calculs :
+
+* Option A : Via Jupyter Notebook
+jupyter notebook devoir_svm.ipynb
+Puis cliquez sur : Kernel -> Restart & Run All.
+
+* Option B : Directement dans VS Code
+Ouvrez le dossier du projet dans VS Code, ouvrez le fichier devoir_svm.ipynb, sélectionnez votre noyau Python en haut à droite, puis cliquez sur "Run All".
+
+> Temps d'exécution : Environ 15 à 25 secondes sur une machine standard pour l'ensemble des résolutions quadratiques duales et de l'étude sur le paramètre epsilon.
