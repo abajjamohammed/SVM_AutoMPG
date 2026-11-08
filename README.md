@@ -135,21 +135,6 @@ L'analyse de l'hyperparamètre $\epsilon$ sur la grille $[0.1, \; 0.5, \; 1.0, \
 
 ---
 
-## Structure du Répertoire
-
-```text
-├── devoir_svm.ipynb          # Notebook documenté pas à pas
-├── requirements.txt          # Environnement de dépendances
-├── README.md                 # Rapport scientifique d'évaluation
-├── imgs/                     # Captures d'écran des visualisations et métriques
-└── src/
-    ├── __init__.py           # Définition du paquet
-    ├── data_preprocessing.py # Pipeline de nettoyage, encodage et découpage
-    ├── svm_classifier.py     # Classifieur quadratique dual & One-vs-Rest
-    └── svm_regressor.py      # Régresseur SVR à perte epsilon-insensible
-
-    ---
-
 ## 6. Protocole de Reproduction & Exécution
 
 Pour répliquer l'intégralité des expériences et régénérer les visualisations :
@@ -191,3 +176,19 @@ Puis cliquez sur : Kernel -> Restart & Run All.
 Ouvrez le dossier du projet dans VS Code, ouvrez le fichier devoir_svm.ipynb, sélectionnez votre noyau Python en haut à droite, puis cliquez sur "Run All".
 
 > Temps d'exécution : Environ 15 à 25 secondes sur une machine standard pour l'ensemble des résolutions quadratiques duales et de l'étude sur le paramètre epsilon.
+
+## Structure du Répertoire
+
+```text
+├── devoir_svm.ipynb          # Notebook documenté pas à pas
+├── requirements.txt          # Environnement de dépendances
+├── README.md                 # Rapport scientifique d'évaluation
+├── imgs/                     # Captures d'écran des visualisations et métriques
+└── src/
+    ├── __init__.py           # Définition du paquet
+    ├── data_preprocessing.py # Pipeline de nettoyage, encodage et découpage
+    ├── svm_classifier.py     # Classifieur quadratique dual & One-vs-Rest
+    └── svm_regressor.py      # Régresseur SVR à perte epsilon-insensible
+
+    ---
+
