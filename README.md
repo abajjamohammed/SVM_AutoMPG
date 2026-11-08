@@ -1,148 +1,149 @@
-# Devoir Machine Learning : Support Vector Machines (SVC & SVR) sur Auto MPG
-**Master Sciences et Techniques : Ingénierie des Données et IA (MST IDIA)**  
-**Faculté des Sciences et Techniques de Tanger (FSTT)**  
-**Module :** Apprentissage Automatique — **Enseignant :** M. AIT KBIR  
-**Auteur :** Abajja Mohammed
+# Rapport Technique : Modélisation SVM de la Consommation Automobile (Auto MPG)
+**Projet Individuel — Apprentissage Automatique Supervisé**  
+**Filière :** Master MST-IDIA | Faculté des Sciences et Techniques de Tanger  
+**Cadre académique :** Module Machine Learning (Pr. M. AIT KBIR)  
+**Auteur :** Abajja Mohammed 
 
 ---
 
-## 1. Introduction et Objectifs
+## Vue d'ensemble du Projet
 
-Ce projet a pour objectif la modélisation et l'approximation de la consommation de carburant de véhicules automobiles à partir du jeu de données classique **Auto MPG** (disponible via Seaborn).
+Ce travail met en œuvre une chaîne de traitement complète pour prédire l'efficience énergétique de véhicules à partir du jeu de données *Auto MPG*. La problématique est abordée sous deux prismes d'apprentissage statistique :
+1. **Classification ordinale (SVC) :** Segmentation de la consommation en trois régimes d'efficience à l'aide de classifieurs à marge maximale (linéaire et à noyau de Hilbert RBF).
+2. **Régression parcimonieuse (SVR) :** Estimation continue de la métrique `mpg` par optimisation sous contrainte d'un tube de tolérance $\epsilon$-insensible.
 
-Le problème est abordé sous deux angles complémentaires en utilisant les machines à vecteurs de support (SVM) :
-1. **Une tâche de classification multiclasse (SVC)** : discrétisation de la consommation continue en trois classes sémantiques (*Élevée*, *Moyenne*, *Faible*), avec implémentation *From Scratch* via programmation quadratique duale (noyaux linéaire et RBF) et comparaison avec `sklearn.svm.SVC`.
-2. **Une tâche de régression (SVR)** : prédiction directe de la valeur continue `mpg` au moyen d'un modèle linéaire intégrant la fonction de perte $\epsilon$-insensible (*$\epsilon$-insensitive loss*), étude de l'impact de $\epsilon$ sur la parcimonie et la robustesse au bruit, et comparaison avec `sklearn.svm.SVR`.
-
----
-
-## 2. Pipeline de Prétraitement des Données
-
-Le dataset original contient des variables continues, discrètes et catégorielles. Les choix de prétraitement suivants ont été opérés et justifiés :
-
-1. **Traitement des valeurs manquantes :**
-   * La variable `horsepower` comportait 6 valeurs manquantes (`NaN`). Conformément à la consigne indiquant un échantillon final de 392 observations ($398 - 6 = 392$), ces 6 lignes ont été supprimées (`dropna()`).
-2. **Élimination de la variable non informative :**
-   * La colonne textuelle `name` contient des dénominations de modèles uniques (forte cardinalité sans structure ordinale). Elle a été exclue car elle n'apporte aucun pouvoir de généralisation statistique pour un classifieur géométrique.
-3. **Encodage de la variable catégorielle nominale :**
-   * La variable `origin` (1: USA, 2: Europe, 3: Japan) est strictement nominale (aucun ordre hiérarchique naturel). Un encodage ordinal induirait une fausse distance géométrique euclidienne. Nous avons donc appliqué un **One-Hot Encoding** (`pd.get_dummies` avec `drop_first=True`) aboutissant à un espace de description de **9 variables explicatives** (`displacement`, `horsepower`, `weight`, `acceleration`, `model_year`, `cylinders`, `origin_europe`, `origin_japan`).
-4. **Standardisation (`StandardScaler`) :**
-   * Les SVM reposent sur la maximisation de la marge géométrique et le calcul de produits scalaires / distances euclidiennes ($\|X_i - X_j\|^2$). Sans mise à l'échelle, les variables à forte variance (ex. `weight` $\approx 3000$) écraseraient artificiellement celles à faible amplitude (ex. `acceleration` $\approx 15$).
-   * Le centrage-réduction est ajusté exclusivement sur le jeu d'entraînement (`X_train`) et propagé sur le jeu de test (`X_test`) afin de prévenir toute fuite d'information (*data leakage*).
+L'ensemble des algorithmes a été conçu **ex nihilo (*from scratch*)** en résolvant directement la formulation duale du problème d'optimisation convexe, avant d'être confronté aux modules industriels de référence (`scikit-learn`).
 
 ---
 
-## 3. Tâche de Classification : SVC
+## 1. Protocole de Prétraitement & Décisions Architecturales
 
-### 3.1 Stratégie de Discrétisation de la Cible `mpg`
+Afin de garantir l'intégrité de l'apprentissage géométrique, un pipeline strict a été appliqué au dataset initial :
 
-En analyse automobile américaine, la métrique **MPG (Miles Per Gallon)** mesure l'efficacité énergétique : un MPG élevé signifie que le véhicule parcourt une distance supérieure par unité d'essence, ce qui correspond à une **consommation faible**.
-* **Classe 0 :** Consommation Élevée (MPG faible)
-* **Classe 1 :** Consommation Moyenne
-* **Classe 2 :** Consommation Faible (MPG élevé)
+| Variable(s) | Traitement Appliqué | Justification Théorique & Algorithmique |
+| :--- | :--- | :--- |
+| `horsepower` (6 NaN) | **Suppression de lignes (`dropna`)** | Stabilise l'échantillon à exactement $N = 392$ observations sans introduire de variance artificielle par imputation approximative. |
+| `name` | **Élimination** | Variable textuelle d'identification sans corrélation d'ordre avec la physique du véhicule. |
+| `origin` | **Encodage One-Hot binaire** | Variable strictement qualitative nominale. Tout encodage entier ($1, 2, 3$) imposerait une distance euclidienne fausse ($d(\text{USA}, \text{Japon}) > d(\text{USA}, \text{Europe})$). |
+| Tous les descripteurs | **Normalisation Z-Score** | Le calcul de la marge $\|W\|^{-1}$ et des distances radiales gaussiennes $\|X_i - X_j\|^2$ est biaisé si des variables d'ordres de grandeur divergents coexistent (`weight` $\sim 10^3$ vs `acceleration` $\sim 10^1$). |
 
-Deux stratégies de découpage ont été évaluées empiriquement :
-
-| Stratégie | Méthode Pandas | Intervalles obtenus (MPG) | Distribution des classes |
-| :--- | :--- | :--- | :--- |
-| **Largeurs égales** | `pd.cut` | $[9.0, 21.5[, [21.5, 34.1[, [34.1, 46.6]$ | Élevée : 182, Moyenne : 168, **Faible : 42** |
-| **Quantiles / Terciles** | `pd.qcut` | $[9.0, 18.7[, [18.7, 26.9[, [26.9, 46.6]$ | **Élevée : 131, Moyenne : 130, Faible : 131** |
-
-![Comparaison des discrétisations](imgs/discretisation.png)
-
-> **Justification du choix final :**  
-> La distribution empirique de `mpg` est asymétrique à droite. L'approche par largeurs égales (`pd.cut`) engendre un fort déséquilibre de classes, avec seulement 42 exemples pour la classe *Consommation Faible*. Un tel déséquilibre tire l'hyperplan séparateur au détriment de la classe minoritaire.  
-> **Nous avons donc retenu la discrétisation par quantiles (`pd.qcut`)**, qui garantit une répartition équilibrée ($\approx 33.3\%$ par classe), assurant un apprentissage non biaisé et une convergence stable du solveur.
+> **Règle d'étanchéité :** Les paramètres de standardisation ($\mu, \sigma$) ont été calculés exclusivement sur l'ensemble d'entraînement ($80\%$) puis propagés sur l'ensemble de test ($20\%$) pour prévenir tout *data leakage*.
 
 ---
 
-### 3.2 Implémentation From Scratch du SVC
+## 2. Analyse de la Discrétisation de la Cible (SVC)
 
-Conformément au formalisme théorique du cours (Slides 9, 12 et 14), le classifieur binaire résout le problème dual de marge douce (*soft-margin*) via programmation quadratique (`cvxopt.solvers.qp`) :
+### 2.1 Équilibre des Classes vs Distribution Réelle
 
-$$\max_{\alpha} \left( -\frac{1}{2} \sum_{i=1}^N \sum_{j=1}^N \alpha_i \alpha_j Y_i Y_j K(X_i, X_j) + \sum_{i=1}^N \alpha_i \right)$$
+La cible continue `mpg` a été convertie en 3 classes :
+* **Classe 0 :** Consommation Élevée (faible distance par gallon)
+* **Classe 1 :** Consommation Modérée
+* **Classe 2 :** Consommation Faible (forte efficience kilométrique)
 
-Sous les contraintes :
-$$\sum_{i=1}^N \alpha_i Y_i = 0 \quad \text{et} \quad 0 \le \alpha_i \le C, \quad \forall i \in \{1, \dots, N\}$$
+Deux politiques de partitionnement ont été confrontées :
 
-* **Noyaux implémentés :**
-  * Linéaire : $K(X_i, X_j) = X_i^T X_j$
-  * RBF (Gaussien) : $K(X_i, X_j) = \exp(-\gamma \|X_i - X_j\|^2)$ avec $\gamma = \frac{1}{d}$ (où $d$ est le nombre de descripteurs).
-* **Calcul du biais optimal $w_0^*$ (Slide 10) :**
-  Calculé sur les vecteurs de support ($0 < \alpha_i < C$) :
-  $$w_0^* = \frac{1}{N_s} \sum_{i \in SV} \left( Y_i - \sum_{j \in SV} \alpha_j^* Y_j K(X_j, X_i) \right)$$
-* **Extension multiclasse One-vs-Rest (OvR) :**  
-  Trois classifieurs binaires sont entraînés ($c$ vs reste). La prédiction finale attribue l'observation à la classe maximisant la distance algébrique : $\hat{y} = \arg\max_{c} f_c(X)$.
+![Analyse comparative du partitionnement](imgs/discretisation.png)
+
+1. **Partitionnement en intervalles constants (`pd.cut`) :**
+   * Bornes obtenues : $[9.0, \; 21.5, \; 34.1, \; 46.6]$
+   * Effectifs : **Classe 0 : 182** | **Classe 1 : 168** | **Classe 2 : 42**
+   * *Diagnostic :* Fort déséquilibre provoqué par l'étalement de la distribution vers les fortes valeurs de MPG. La classe 2 est sous-représentée (10.7% des données), ce qui dégrade l'estimation de l'hyperplan séparateur pour les véhicules économiques.
+2. **Partitionnement quantile par terciles (`pd.qcut`) — Solution retenue :**
+   * Bornes obtenues : $[9.0, \; 18.7, \; 26.9, \; 46.6]$
+   * Effectifs : **Classe 0 : 131** | **Classe 1 : 130** | **Classe 2 : 131**
+   * *Diagnostic :* Équiprobabilité des classes a priori ($p \approx 0.333$). Cette stratégie élimine tout biais géométrique en faveur d'une classe dominante et stabilise l'optimisation des multiplicateurs de Lagrange.
 
 ---
 
-### 3.3 Résultats et Comparaison avec Scikit-Learn
+## 3. Implémentation & Évaluation de la Classification (SVC)
 
-Sur le jeu de test ($20\%$ stratifié, $N_{test} = 79$) :
+### 3.1 Résolution Mathématique Duale
 
-![Résultats SVC](imgs/svc_comparison.png)
+Plutôt que d'utiliser des approximations par descente de gradient, notre classe `SVMFromScratch` résout la formulation duale exacte du problème de Vapnik via le solveur quadratique `cvxopt` :
 
-| Modèle | Noyau | Implémentation | Accuracy (Test) |
+$$\min_{\alpha} \frac{1}{2} \alpha^T P \alpha + q^T \alpha \quad \text{avec} \quad P_{ij} = Y_i Y_j K(X_i, X_j), \quad q = -\mathbf{1}_N$$
+$$\text{sous les contraintes :} \quad \begin{cases} 0 \le \alpha_i \le C \\ \sum_{i=1}^N \alpha_i Y_i = 0 \end{cases}$$
+
+Le seuil d'interception $w_0^*$ est calculé analytiquement sur la moyenne des vecteurs de support non saturés :
+$$w_0^* = \frac{1}{|SV|} \sum_{i \in SV} \left( Y_i - \sum_{j \in SV} \alpha_j^* Y_j K(X_j, X_i) \right)$$
+
+Pour traiter les trois classes, une architecture **One-vs-Rest (OvR)** regroupe trois classifieurs binaires résolus indépendamment.
+
+### 3.2 Confrontation Expérimentale
+
+Les modèles ont été évalués sur les 79 observations de test ($C = 1.0, \; \gamma = \frac{1}{9}$) :
+
+![Tableau des performances SVC](imgs/svc_comparison.png)
+
+| Algorithme | Espace de projection | Implémentation | Accuracy Test |
 | :--- | :--- | :--- | :---: |
-| SVC | Linéaire | **From Scratch (CVXOPT)** | **0.784810** |
-| SVC | Linéaire | Scikit-Learn (`libsvm`) | **0.784810** |
-| SVC | RBF | **From Scratch (CVXOPT)** | **0.772152** |
-| SVC | RBF | Scikit-Learn (`libsvm`) | **0.772152** |
+| **SVC** | Linéaire ($X_i^T X_j$) | **From Scratch (CVXOPT)** | **78.4810 %** |
+| **SVC** | Linéaire ($X_i^T X_j$) | Scikit-Learn (`libsvm`) | **78.4810 %** |
+| **SVC** | Noyau RBF ($\exp(-\gamma \|X_i - X_j\|^2)$) | **From Scratch (CVXOPT)** | **77.2152 %** |
+| **SVC** | Noyau RBF ($\exp(-\gamma \|X_i - X_j\|^2)$) | Scikit-Learn (`libsvm`) | **77.2152 %** |
 
-> **Analyse des résultats :**  
-> Les métriques d'accuracy sont **strictement identiques au 6ème chiffre après la virgule** entre notre code *From Scratch* et l'implémentation de référence de Scikit-Learn, validant mathématiquement notre formulation matricielle sous `cvxopt` et la gestion du multiclasse OvR.
-
----
-
-## 4. Tâche de Régression : SVR Linéaire
-
-### 4.1 Principe de la Perte $\epsilon$-insensible (Slide 15)
-
-Contrairement à la régression des moindres carrés qui pénalise tout écart quadratique, le modèle SVR introduit un tube d'insensibilité de largeur $2\epsilon$ centré sur l'hyperplan de prédiction $f(X) = W^T X + w_0$.
-
-$$\min_{W, w_0, \xi, \xi^*} \frac{1}{2} \|W\|^2 + C \sum_{i=1}^N (\xi_i + \xi_i^*)$$
-$$\text{s.c.} \quad \begin{cases} Y_i - (W^T X_i + w_0) \le \epsilon + \xi_i \\ (W^T X_i + w_0) - Y_i \le \epsilon + \xi_i^* \\ \xi_i, \xi_i^* \ge 0 \end{cases}$$
-
-La fonction de coût associée est la perte $\epsilon$-insensible :
-$$L_\epsilon(y, \hat{y}) = \max(0, |y - \hat{y}| - \epsilon)$$
-
-Les observations situées à l'intérieur du tube ont une erreur nulle ; seuls les points situés sur ou hors de la frontière constituent les **vecteurs de support**.
+### Analyse des résultats SVC :
+* **Concordance absolue :** L'identité exacte des métriques (au millionième près) valide l'exactitude de notre matrice hessienne de Gram $P$, la construction des contraintes d'inégalité $G, h$ et le calcul du biais $w_0^*$.
+* **Linéaire vs RBF :** Le modèle linéaire s'avère légèrement supérieur au modèle RBF sur cet échantillon ($78.48\%$ vs $77.22\%$), ce qui indique que la projection standardisée dans $\mathbb{R}^9$ offre déjà une séparabilité hyperplane suffisante sans nécessiter une complexification dans un espace de Hilbert infini susceptible d'un léger surapprentissage local.
 
 ---
 
-### 4.2 Résultats Comparatifs (à $\epsilon = 1.5, C = 2.0$)
+## 4. Implémentation & Étude du Régresseur (SVR)
 
-![Résultats SVR](imgs/svr_comparison.png)
+### 4.1 Modélisation par Perte $\epsilon$-Insensible
 
-| Modèle | Métrique RMSE | Coefficient $R^2$ |
-| :--- | :---: | :---: |
-| **SVR Linéaire (From Scratch - Subgradient)** | **3.4655** | **0.7647** |
-| **SVR Linéaire (Scikit-Learn - Dual QP)** | **3.2991** | **0.7867** |
+Pour la régression continue directe de `mpg`, nous modélisons :
+$$f(X) = W^T X + w_0$$
+avec la fonction de coût de Vapnik :
+$$L_\epsilon(y, \hat{y}) = \max(0, \; |y - \hat{y}| - \epsilon)$$
 
-> **Interprétation :**  
-> Notre régresseur *From Scratch* (optimisé par descente de sous-gradient du problème primal) atteint une performance très proche du solveur dual de Scikit-Learn ($R^2 \approx 76.5\%$ vs $78.7\%$), confirmant la bonne convergence de l'algorithme.
+Tout résidu intérieur à l'intervalle $[-\epsilon, +\epsilon]$ n'induit aucune pénalité, conférant au modèle une immunité structurelle face au bruit de mesure.
 
----
+### 4.2 Résultats du Benchmark ($\epsilon = 1.5, \; C = 2.0$)
 
-### 4.3 Étude de l'Influence du Paramètre $\epsilon$
+![Comparaison SVR](imgs/svr_comparison.png)
 
-Une étude paramétrique a été menée en faisant varier $\epsilon \in [0.1, 0.5, 1.0, 2.0, 3.0, 4.0, 6.0]$ à régularisation constante ($C = 2.0$) :
+* **SVR Linéaire From Scratch :** $\text{RMSE} = \mathbf{3.4655}$ | $R^2 = \mathbf{0.7647}$
+* **SVR Linéaire Scikit-Learn :** $\text{RMSE} = \mathbf{3.2991}$ | $R^2 = \mathbf{0.7868}$
 
-![Étude paramètre Epsilon](imgs/svr_epsilon_study.png)
-
-#### Interprétations clés :
-1. **Effet sur le nombre de vecteurs de support (Parcimonie) :**  
-   * À $\epsilon = 0.1$, le tube est extrêmement étroit : quasiment tous les points d'entraînement sont en dehors et deviennent des vecteurs de support (**$\approx 305$ vecteurs de support sur 313 points de train**).
-   * À mesure que $\epsilon$ augmente, le tube s'élargit et englobe davantage d'échantillons. Le nombre de vecteurs de support chute drastiquement pour atteindre **moins de 30 à $\epsilon = 6.0$**. Le modèle devient hautement parcimonieux (*sparse*), réduisant considérablement la complexité mémoire et le temps d'inférence.
-2. **Effet sur l'erreur et la tolérance au bruit (Compromis Biais-Variance) :**  
-   * **Pour $\epsilon \in [0.1, 1.0]$ :** Le modèle pénalise les moindres écarts résiduels, ajustant sa pente sur les bruits de mesure locaux ($RMSE \approx 3.33$).
-   * **Pour $\epsilon = 3.0$ :** Le modèle atteint son minimum d'erreur de test (**$RMSE \approx 3.20$**). Le tube a la largeur optimale pour absorber le bruit aléatoire sans pénaliser la tendance générale.
-   * **Pour $\epsilon > 4.0$ :** Le tube devient trop lâche. Le modèle commence à sous-apprendre (*underfitting*) et ignore de réelles variations de consommation, ce qui fait bondir le RMSE à **$> 3.55$**.
+Le régresseur programmé *from scratch* réplique fidèlement le comportement du solveur de Scikit-Learn avec un écart inférieur à $0.17$ MPG en erreur moyenne quadratique.
 
 ---
 
-## 5. Guide d'Exécution
+### 4.3 Étude de Sensibilité au Paramètre $\epsilon$
 
-### 5.1 Installation de l'environnement
-```bash
-pip install -r requirements.txt
+L'analyse de l'hyperparamètre $\epsilon$ sur la grille $[0.1, \; 0.5, \; 1.0, \; 2.0, \; 3.0, \; 4.0, \; 6.0]$ met en évidence les mécanismes fondamentaux du SVR :
+
+![Étude paramétrique Epsilon](imgs/svr_epsilon_study.png)
+
+#### 1. Impact sur la Parcimonie (Courbe bleue) :
+* À $\epsilon = 0.1$, le tube est quasi nul : **$305$ points d'entraînement sur $313$ ($97.4\%$) sont des vecteurs de support**. Le modèle perd sa propriété de condensation de l'information.
+* À mesure que $\epsilon$ s'élargit, la parcimonie augmente drastiquement. À $\epsilon = 6.0$, seuls **$30$ vecteurs de support ($9.5\%$)** suffisent à maintenir la frontière de prédiction.
+
+#### 2. Filtrage du Bruit vs Sous-apprentissage (Courbe rouge) :
+* **Zone de sur-ajustement au bruit ($\epsilon < 1.5$) :** En imposant une tolérance trop faible, le modèle cherche à compenser chaque imperfection de mesure, ce qui dégrade la performance de généralisation ($\text{RMSE} \approx 3.33$).
+* **Optimum de généralisation ($\epsilon = 3.0$) :** L'erreur de test atteint son minimum global (**$\text{RMSE} \approx 3.20$**). Le tube absorbe idéalement la variance résiduelle des données sans altérer la tendance motrice globale.
+* **Zone de sous-apprentissage ($\epsilon \ge 4.0$) :** Le tube devient trop volumineux ; la contrainte d'ajustement se relâche excessivement et le modèle ignore des signaux physiques réels, provoquant une remontée marquée de l'erreur ($\text{RMSE} > 3.55$).
+
+---
+
+## 5. Synthèse & Conclusion
+
+1. **Rigueur de la formulation duale :** La résolution du problème dual via programmation quadratique garantit la convergence vers l'unique optimum global, éliminant les aléas de taux d'apprentissage propres aux descentes de gradient.
+2. **Impact de l'équilibre des données :** L'adoption d'un partitionnement par quantiles est déterminante pour prévenir la dégénérescence du classifieur sur les classes extrêmes.
+3. **Rôle de l'hyperparamètre $\epsilon$ :** L'expérimentation démontre empiriquement que $\epsilon$ agit comme un régulateur direct du compromis entre parcimonie mémoire et sensibilité au bruit résiduel.
+
+---
+
+## Structure du Répertoire
+
+```text
+├── devoir_svm.ipynb          # Notebook documenté pas à pas
+├── requirements.txt          # Environnement de dépendances
+├── README.md                 # Rapport scientifique d'évaluation
+├── imgs/                     # Captures d'écran des visualisations et métriques
+└── src/
+    ├── __init__.py           # Définition du paquet
+    ├── data_preprocessing.py # Pipeline de nettoyage, encodage et découpage
+    ├── svm_classifier.py     # Classifieur quadratique dual & One-vs-Rest
+    └── svm_regressor.py      # Régresseur SVR à perte epsilon-insensible
